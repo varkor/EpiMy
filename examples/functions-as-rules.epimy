@@ -1,0 +1,13 @@
+# This program demonstrates the ability to execute treat MysoreScript functions as Epilog rules.
+@[MysoreScript] {
+	function square(x) {
+		var y = 0;
+		for (int i = 0; i < x; i = i + 1) {
+			y = y + x;
+		}
+		return y;
+	}
+}
+@[Epilog] {
+	?- square(5, 25).
+}

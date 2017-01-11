@@ -1,0 +1,9 @@
+[submodule "Pegmatite"]
+	path = lib/Pegmatite
+	url = https://github.com/CompilerTeaching/Pegmatite.git
+[submodule "lib/Epilog"]
+	path = lib/Epilog
+	url = https://github.com/varkor/Epilog
+[submodule "lib/MysoreScript"]
+	path = lib/MysoreScript
+	url = https://github.com/varkor/MysoreScript
