@@ -5,7 +5,7 @@
 	vowel(i).
 	vowel(o).
 	vowel(u).
-}
+@}
 @[MysoreScript] {
 	var letters = new Array;
 	letters.atPut(0, "e");
@@ -21,4 +21,4 @@
 			(letter + " is a consonant.\n").dump();
 		}
 	}
-}
+@}

@@ -1,7 +1,7 @@
 # This simple program demonstrates the ability to execute both Epilog and MysoreScript code in the same file.
 @[Epilog] {
-	? :- write("This was printed from Epilog."), nl.
-}
+	?- write('This was printed from Epilog.'), nl.
+@}
 @[MysoreScript] {
 	"This was printed from MysoreScript.\n".dump();
-}
+@}

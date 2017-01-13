@@ -1,5 +1,5 @@
 # EpiMy Compositional Semantics
-An EpiMy program consists of a series of language blocks, denoted by `@[<Language>] { ... }` tags within which is placed arbitrary, standalone, `<Language>` code, where `<Language>` is one of `Epilog` or `MysoreScript`.
+An EpiMy program consists of a series of language blocks, denoted by `@[<Language>] { ... @}` tags within which is placed arbitrary, standalone, `<Language>` code, where `<Language>` is one of `Epilog` or `MysoreScript`.
 If the code in a block would be error-free if executed alone in a standard compiler, it will have the same effect as part of an EpiMy program.
 
 ## Converting Datatypes between Languages

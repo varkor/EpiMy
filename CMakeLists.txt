@@ -3,9 +3,22 @@ cmake_minimum_required(VERSION 2.8)
 project(epimy)
 
 set(epimy_CXX_SRCS
-	# Compile the Pegmatite .cc files directly into the program (rather than creating a separate library).
+	# Compile the Pegmatite source files directly into the program (rather than creating a separate library).
 	lib/Pegmatite/ast.cc
 	lib/Pegmatite/parser.cc
+
+	# Compile the Epilog source files.
+	lib/Epilog/src/interpreter.cc
+	lib/Epilog/src/runtime.cc
+
+	# Compile the MysoreScript source files.
+	lib/MysoreScript/src/compiler.cc
+	lib/MysoreScript/src/interpreter.cc
+	lib/MysoreScript/src/runtime.cc
+
+	# Compile the EpiMy source files.
+	src/adaptors.cc
+	src/interpreter.cc
 	src/main.cc
 )
 set(LLVM_LIBS all)
@@ -15,7 +28,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bin)
 add_executable(epimy ${epimy_CXX_SRCS})
 # We're using Pegmatite in the RTTI mode.
 add_definitions(-DUSE_RTTI=1)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -I../lib")
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 	set(CLANG_FLAGS "-Wdeprecated -Wno-zero-length-array -Wno-unknown-attributes")
@@ -24,6 +37,23 @@ else()
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 endif()
 
+# Find the Boehm GC files for garbage collection.
+include(FindPkgConfig)
+pkg_check_modules(GC REQUIRED bdw-gc)
+link_directories(${GC_LIBRARY_DIRS})
+find_library(LIBGC gc-threaded PATHS "${GC_LIBRARY_DIRS}")
+find_library(LIBGC gc-threaded PATHS "${GC_LIBRARY_DIRS}")
+if(${LIBGC} STREQUAL "LIBGC-NOTFOUND")
+	find_library(LIBGC gc PATHS GC_LIBRARY_DIRS)
+endif()
+if(${LIBGC} STREQUAL "LIBGC-NOTFOUND")
+	message(ERROR "Unable to find Boehm GC library")
+endif()
+
+message(STATUS "Using Boehm GC library: ${LIBGC}")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${GC_CFLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${GC_CFLAGS}")
+include_directories(GC_INCLUDE_DIRS)
 
 find_program(LLVM_CONFIG NAMES llvm-config DOC "Path to llvm-config utility")
 if (${LLVM_CONFIG} STREQUAL "LLVM_CONFIG-NOTFOUND")
@@ -40,7 +70,6 @@ exec_program(${LLVM_CONFIG} ARGS --system-libs OUTPUT_VARIABLE LLVM_SYSTEMLIBS)
 exec_program(${LLVM_CONFIG} ARGS --libdir OUTPUT_VARIABLE LLVM_LIBDIR)
 exec_program(${LLVM_CONFIG} ARGS --bindir OUTPUT_VARIABLE LLVM_BINDIR)
 string(REGEX REPLACE "([0-9]*).([0-9]*).*" "-DLLVM_MAJOR=\\1 -DLLVM_MINOR=\\2" LLVM_VERSION "${LLVM_VER}")
-
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${LLVM_CXXFLAGS} ${LLVM_VERSION}")
 target_link_libraries(epimy ${LLVM_LIBS_FLAGS})

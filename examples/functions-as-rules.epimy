@@ -7,7 +7,7 @@
 		}
 		return y;
 	}
-}
+@}
 @[Epilog] {
 	?- square(5, 25).
-}
+@}
