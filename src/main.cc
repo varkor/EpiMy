@@ -19,8 +19,13 @@ int main(int argc, char* argv[]) {
 		std::unique_ptr<EpiMy::AST::LanguageBlocks> root;
 		pegmatite::AsciiFileInput input(open(argv[1], O_RDONLY));
 		if (parser.parse(input, parser.grammar.languageBlocks, parser.grammar.ignored, pegmatite::defaultErrorReporter, root)) {
-			root->interpret(context);
-			return EXIT_SUCCESS;
+			try {
+				root->interpret(context);
+				return EXIT_SUCCESS;
+			} catch (const ::Epilog::Exception& exception) {
+				exception.print();
+				return EXIT_FAILURE;
+			}
 		} else {
 			return EXIT_FAILURE;
 		}

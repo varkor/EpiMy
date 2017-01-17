@@ -16,9 +16,9 @@
 	letters.atPut(5, "g");
 	for (var i = 0; i < letters.length(); i = i + 1) {
 		if (vowel(letter)) {
-			(letter + " is a vowel.\n").dump();
+			(letter + " is a vowel.\n").print();
 		} else {
-			(letter + " is a consonant.\n").dump();
+			(letter + " is a consonant.\n").print();
 		}
 	}
 @}

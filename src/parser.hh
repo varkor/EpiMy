@@ -9,7 +9,6 @@ namespace EpiMy {
 			BindAST<AST::LanguageBlocks> languageBlocks = EpiMyGrammar::get().languageBlocks;
 			BindAST<AST::LanguageBlock> languageBlock = EpiMyGrammar::get().languageBlock;
 			public:
-			int z = 8;
 			const EpiMyGrammar& grammar = EpiMyGrammar::get();
 		};
 	}

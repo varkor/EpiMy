@@ -1,0 +1,10 @@
+# This program demonstrates how an Epilog program may access variables defined in MysoreScript.
+@[MysoreScript] {
+	var name = "MysoreScript";
+@}
+@[Epilog] {
+	?- var(name, Name), write('Hello '), write(Name), write('!'), nl, set(name, 'Epilog').
+@}
+@[MysoreScript] {
+	("Hello " + name + "!\n").print();
+@}

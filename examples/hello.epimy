@@ -3,5 +3,5 @@
 	?- write('This was printed from Epilog.'), nl.
 @}
 @[MysoreScript] {
-	"This was printed from MysoreScript.\n".dump();
+	"This was printed from MysoreScript.\n".print();
 @}

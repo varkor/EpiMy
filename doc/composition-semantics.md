@@ -18,6 +18,9 @@ If such a function is found, it will unify with the goal, if and only if:
 - It has the same number of arguments as the goal term and, when passed each of the goal's parameters as arguments, returns a value that is logically equivalent to `true`.
 - It has one fewer arguments than the goal term and, when passed each bar the final of the goal's parameters as arguments, returns a value that unifies with the ultimate parameter of the goal term.
 
+### Variable Resolution
+The semantics of variables in Epilog are not affected, so that they operate as expected when binding. However, variables from an outer scope in a MysoreScript can be accessed through the built-in `var/2(+Name, ?Value)` provided by EpiMy in addition to the standard library. Given an atom, `Name`, `Value` will bind to the value of the variable with the given name in the enclosing MysoreScript scope. (Note that to bind to variables starting with a capital letter in MysoreScript, a quoted atom must be used.)
+
 ## MysoreScript Semantics
 ### Function Resolution
 Upon reaching an function application in MysoreScript, if the function name is in scope, it will be executed as usual. However, if it cannot be found, a matching Epilog clause will be sought. This is a clause such that:
