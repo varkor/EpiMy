@@ -5,9 +5,9 @@ project(epimy)
 set(epimy_CXX_SRCS
 	# Compile the Pegmatite source files directly into the program (rather than creating a separate library).
 	lib/Pegmatite/ast.cc
-	lib/Pegmatite/parser.cc
 
 	# Compile the Epilog source files.
+	lib/Epilog/src/ast.cc
 	lib/Epilog/src/interpreter.cc
 	lib/Epilog/src/runtime.cc
 

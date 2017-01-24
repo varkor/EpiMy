@@ -41,5 +41,7 @@ namespace EpiMy {
 			MysoreScript(Interpreter::Context&);
 			virtual void execute(std::string string) override;
 		};
+		
+		::MysoreScript::Obj convertTermToObj(::Epilog::HeapContainer* term);
 	}
 }
