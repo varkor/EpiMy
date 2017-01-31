@@ -30,6 +30,9 @@ namespace EpiMy {
 		::Epilog::HeapReference convertObjToTerm(::MysoreScript::Obj& obj) {
 			// Converts a MysoreScript object into an Epilog term.
 			// Currently only integers and strings are supported.
+			if (obj == nullptr) {
+				throw ::Epilog::RuntimeException("Tried to convert a null object into a term.", __FILENAME__, __func__, __LINE__);
+			}
 			if (::MysoreScript::isInteger(obj)) {
 				::Epilog::HeapReference::heapIndex index = ::Epilog::Runtime::heap.size();
 				::Epilog::HeapNumber number(::MysoreScript::getInteger(obj));
@@ -145,6 +148,58 @@ namespace EpiMy {
 				}
 				throw ::Epilog::UnificationError("Tried to access an inexistent MysoreScript context.", __FILENAME__, __func__, __LINE__);
 			};
+			
+			::Epilog::StandardLibrary::functions["call/3"] = [& epimyContext] (::Epilog::Interpreter::Context& epilogContext, ::Epilog::HeapReference::heapIndex& registers) {
+				pushInstruction(epilogContext, new ::Epilog::CommandInstruction("call"));
+				pushInstruction(epilogContext, new ::Epilog::UnifyRegisterAndArgumentInstruction(::Epilog::HeapReference(::Epilog::StorageArea::reg, 3), ::Epilog::HeapReference(::Epilog::StorageArea::reg, 2)));
+				pushInstruction(epilogContext, new ::Epilog::ProceedInstruction());
+				registers = 4;
+			};
+			
+			::Epilog::StandardLibrary::commands["call"] = [& epimyContext] () {
+				for (auto i = epimyContext.stack.rbegin(); i != epimyContext.stack.rend(); ++ i) {
+					// We're only interested in getting variables from MysoreScript contexts.
+					if (MysoreScript* adaptor = dynamic_cast<MysoreScript*>((*i).get())) {
+						::MysoreScript::Obj* value;
+						if ((value = adaptor->context.lookupSymbol(::Epilog::Runtime::registers[0]->trace())) != nullptr) {
+							::MysoreScript::Obj obj = *value;
+							if (!::MysoreScript::isInteger(*value) && obj->isa == &::MysoreScript::ClosureClass) {
+								::MysoreScript::Closure* closure = reinterpret_cast<::MysoreScript::Closure*>(obj);
+								::MysoreScript::Obj argumentObj = convertTermToObj(::Epilog::Runtime::registers[1].get());
+								if (!::MysoreScript::isInteger(argumentObj) && argumentObj->isa == &::MysoreScript::ArrayClass) {
+									::MysoreScript::Array* array = reinterpret_cast<::MysoreScript::Array*>(argumentObj);
+									int arity = array->length ? ::MysoreScript::getInteger(array->length) : 0;
+									int arityCheck = ::MysoreScript::isInteger(closure->parameters) ? ::MysoreScript::getInteger(closure->parameters) : 0;
+									if (arity != arityCheck) {
+										throw ::Epilog::RuntimeException("Tried to call a MysoreScript with the incorrect number of arguments.", __FILENAME__, __func__, __LINE__);
+									}
+									::MysoreScript::Obj* arguments = new ::MysoreScript::Obj[1];
+									arguments[0] = ::MysoreScript::createSmallInteger(187);
+									for (int i = 0; i < arity; ++ i) {
+										arguments[i] = array->buffer[i];
+									}
+									::MysoreScript::currentContext = &adaptor->context;
+									::MysoreScript::Obj returnValue = ::MysoreScript::callCompiledClosure(closure->invoke, closure, arguments, arity);
+									delete[] arguments;
+									if (::Epilog::UnifyRegisterAndArgumentInstruction* instruction = dynamic_cast<::Epilog::UnifyRegisterAndArgumentInstruction*>(::Epilog::Runtime::instructions[::Epilog::Runtime::nextInstruction + 1].get())) {
+										instruction->registerReference.assign(convertObjToTerm(returnValue).getAsCopy());
+										return;
+									} else {
+										throw ::Epilog::RuntimeException("Tried to bind to a MysoreScript variable without then unifying.", __FILENAME__, __func__, __LINE__);
+									}
+								} else {
+									throw ::Epilog::RuntimeException("Tried to call a MysoreScript closure with a set of arguments that was not a list.", __FILENAME__, __func__, __LINE__);
+								}
+							} else {
+								throw ::Epilog::RuntimeException("Tried to call an non-closure MysoreScript variable.", __FILENAME__, __func__, __LINE__);
+							}
+						} else {
+							throw ::Epilog::RuntimeException("Tried to call an undefined MysoreScript variable.", __FILENAME__, __func__, __LINE__);
+						}
+					}
+				}
+				throw ::Epilog::UnificationError("Tried to access an inexistent MysoreScript context.", __FILENAME__, __func__, __LINE__);
+			};
 		}
 		
 		void Epilog::execute(std::string string) {
@@ -170,6 +225,7 @@ namespace EpiMy {
 			pegmatite::StringInput input(string);
 			if (parser.parse(input, parser.g.statements, parser.g.ignored, pegmatite::defaultErrorReporter, root)) {
 				root->interpret(context);
+				previousASTs.push_back(std::move(root));
 			} else {
 				throw ::Epilog::CompilationException("Could not parse the MysoreScript block.", __FILENAME__, __func__, __LINE__);
 			}

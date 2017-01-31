@@ -1,8 +1,4 @@
 # This program demonstrates the ability to execute treat MysoreScript functions as Epilog rules.
-@[Epilog] {
-	iss(A, A).
-	?- iss(a, N), writeln(N).
-@}
 @[MysoreScript] {
 	func square(x) {
 		var y = 0;
@@ -15,5 +11,5 @@
 	};
 @}
 @[Epilog] {
-	?- square(5, 25).
+	?- call(square, [5], X), writeln(X).
 @}

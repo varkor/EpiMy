@@ -7,6 +7,9 @@
 	vowel(u).
 @}
 @[MysoreScript] {
+	func vowel(letter) {
+		return 0;
+	};
 	var letters = new Array;
 	letters.atPut(0, "e");
 	letters.atPut(1, "p");
@@ -14,11 +17,15 @@
 	letters.atPut(3, "l");
 	letters.atPut(4, "o");
 	letters.atPut(5, "g");
-	for (var i = 0; i < letters.length(); i = i + 1) {
-		if (vowel(letter)) {
+	var i = 0;
+	while (i < letters.length()) {
+		var letter = letters.at(i);
+		var isVowel = unify("vowel", [letter]).at(0);
+		if (isVowel) {
 			(letter + " is a vowel.\n").print();
 		} else {
 			(letter + " is a consonant.\n").print();
 		}
+		i = i + 1;
 	}
 @}
