@@ -13,7 +13,11 @@
 	class& operator=(const class& other) = default;
 
 namespace EpiMy {
+	extern pegmatite::ErrorReporter errorReporter;
+	
 	namespace Adaptors {
+		extern Interpreter::Context* currentContext;
+		
 		class Adaptor {
 			public:
 			POLYMORPHIC(Adaptor)
@@ -23,9 +27,10 @@ namespace EpiMy {
 		
 		class Epilog: public Adaptor {
 			::Epilog::Parser::EpilogParser parser;
-			::Epilog::Interpreter::Context context;
 			
 			public:
+			::Epilog::Interpreter::Context context;
+			
 			Epilog(Interpreter::Context&);
 			
 			virtual void execute(std::string string) override;

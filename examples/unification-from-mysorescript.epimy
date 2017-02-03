@@ -5,27 +5,31 @@
 	vowel(i).
 	vowel(o).
 	vowel(u).
+	
+	successor(a, b).
 @}
 @[MysoreScript] {
-	func vowel(letter) {
-		return 0;
-	};
-	var letters = new Array;
-	letters.atPut(0, "e");
-	letters.atPut(1, "p");
-	letters.atPut(2, "i");
-	letters.atPut(3, "l");
-	letters.atPut(4, "o");
-	letters.atPut(5, "g");
+	var letters = ["e", "p", "i", "l", "o", "g"];
 	var i = 0;
 	while (i < letters.length()) {
 		var letter = letters.at(i);
-		var isVowel = unify("vowel", [letter]).at(0);
+		var isVowel = unify("vowel", [letter]);
 		if (isVowel) {
 			(letter + " is a vowel.\n").print();
 		} else {
 			(letter + " is a consonant.\n").print();
 		}
 		i = i + 1;
+	}
+	var binds = unify("successor", ["a", null]);
+	if (binds) {
+		var successor = binds.at(1);
+		if (successor) {
+			("a is followed by " + successor + ".\n").print();
+		} else {
+			"All values are successors of a.\n".print();
+		}
+	} else {
+		"a has no successor.\n".print();
 	}
 @}

@@ -1,6 +1,6 @@
 [submodule "Pegmatite"]
 	path = lib/Pegmatite
-	url = https://github.com/CompilerTeaching/Pegmatite.git
+	url = https://github.com/varkor/Pegmatite
 [submodule "lib/Epilog"]
 	path = lib/Epilog
 	url = https://github.com/varkor/Epilog

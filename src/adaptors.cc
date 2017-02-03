@@ -1,7 +1,14 @@
 #include "adaptors.hh"
 
 namespace EpiMy {
+	void epimyErrorReporter(const pegmatite::InputRange& inputRange, const std::string& message) {
+		std::cerr << "Syntax error at " << inputRange.start.line << ":" << inputRange.start.col << ": " << inputRange.str() << std::endl;
+	}
+	pegmatite::ErrorReporter errorReporter = epimyErrorReporter;
+	
 	namespace Adaptors {
+		Interpreter::Context* currentContext;
+		
 		std::string escapeFunctorName(std::string string) {
 			std::string::size_type position = 0;
 			while ((position = string.find("'", position)) != std::string::npos) {
@@ -66,7 +73,7 @@ namespace EpiMy {
 					}
 					return previous;
 				}
-				return pushCompoundTerm(::Epilog::HeapFunctor(escapeFunctorName(functorName), 0));
+				return pushCompoundTerm(::Epilog::HeapFunctor(::Epilog::AST::normaliseIdentifierName(escapeFunctorName(functorName)), 0));
 			}
 		}
 		
@@ -90,11 +97,17 @@ namespace EpiMy {
 		}
 		
 		::MysoreScript::Obj convertTermToObj(::Epilog::HeapContainer* term) {
-			// Converts an Epilog term into a MysoreScript object.
-			// Epilog lists correspond to MysoreScript arrays, integers correspond to integers, and anything other compound term is converted into a string.
-			std::list<::MysoreScript::Obj> elements;
-			if (buildArray(elements, term)) {
-				return ::MysoreScript::constructArrayObj(elements);
+			// Converts an Epilog term into a MysoreScript object. This assumes the term has already been dereferenced.
+			// Epilog lists correspond to MysoreScript arrays, integers correspond to integers, and any other compound term is converted into a string. Unbound variables are converted into null values.
+			if (::Epilog::HeapTuple* tuple = dynamic_cast<::Epilog::HeapTuple*>(term)) {
+				if (tuple->type == ::Epilog::HeapTuple::Type::reference) {
+					// Terms that are still references after being dereferenced are unbound variables. These are mapped to null values in MysoreScript.
+					return nullptr;
+				}
+				std::list<::MysoreScript::Obj> elements;
+				if (buildArray(elements, term)) {
+					return ::MysoreScript::constructArrayObj(elements);
+				}
 			}
 			if (::Epilog::HeapNumber* number = dynamic_cast<::Epilog::HeapNumber*>(term)) {
 				return ::MysoreScript::createSmallInteger(number->value);
@@ -205,7 +218,7 @@ namespace EpiMy {
 		void Epilog::execute(std::string string) {
 			std::unique_ptr<::Epilog::AST::Clauses> root;
 			pegmatite::StringInput input(string);
-			if (parser.parse(input, parser.grammar.clauses, parser.grammar.ignored, pegmatite::defaultErrorReporter, root)) {
+			if (parser.parse(input, parser.grammar.clauses, parser.grammar.ignored, errorReporter, root)) {
 				try {
 					root->interpret(context);
 				} catch (const ::Epilog::UnificationError& error) { 
@@ -218,12 +231,76 @@ namespace EpiMy {
 			}
 		}
 		
-		MysoreScript::MysoreScript(Interpreter::Context& context) { }
+		::MysoreScript::Obj unify(::MysoreScript::Closure* closure, ::MysoreScript::Obj name, ::MysoreScript::Obj parameters) {
+			// This function does not go through the usual execution path for MysoreScript closures, as it relies heavily on manipulating state outside of the MysoreScript runtime's control. Instead, this function acts as a hook that is called whenever the unify() MysoreScript function is called. This does, however, mean that currently this function must be interpreted, and not compiled.
+			if (name->isa != &::MysoreScript::StringClass) {
+				throw ::Epilog::RuntimeException("Tried to unify an Epilog clause with a non-string functor.", __FILENAME__, __func__, __LINE__);
+			}
+			if (parameters->isa != &::MysoreScript::ArrayClass) {
+				throw ::Epilog::RuntimeException("Tried to unify an Epilog clause with a non-list set of parameters.", __FILENAME__, __func__, __LINE__);
+			}
+			if (currentContext == nullptr) {
+				throw ::Epilog::RuntimeException("Cannot identify current EpiMy context.", __FILENAME__, __func__, __LINE__);
+			}
+			Interpreter::Context& epimyContext(*currentContext);
+			for (auto i = epimyContext.stack.rbegin(); i != epimyContext.stack.rend(); ++ i) {
+				// We're only interested in unifying in Epilog contexts.
+				if (Epilog* adaptor = dynamic_cast<Epilog*>((*i).get())) {
+					// Although we can handle most of the execution process ourselves, in order to actually perform unification, we need to actually push a call instruction to the instruction list as Epilog does not currently support running instructions from a separate instruction vector from the main runtime, and requires an instruction index from which to begin.
+					// First, push the arguments to the heap.
+					::MysoreScript::String* string = reinterpret_cast<::MysoreScript::String*>(name);
+					::MysoreScript::Array* array = reinterpret_cast<::MysoreScript::Array*>(parameters);
+					::Epilog::HeapReference::heapIndex length = array->length ? ::MysoreScript::getInteger(array->length) : 0;
+					// Make sure we don't overflow the number of Epilog registers.
+					while (::Epilog::Runtime::registers.size() < length) {
+						::Epilog::Runtime::registers.push_back(nullptr);
+					}
+					for (::Epilog::HeapReference::heapIndex i = 0; i < length; ++ i) {
+						// We can skip the usual put_structure instructions by directly modifying the registers. This is because we're in a MysoreScript context, so we're not going to be interfering with any existing instruction execution by doing so, and we're going to be triggering execution of the instructions immediately following register assignment.
+						if (array->buffer[i] != nullptr) {
+							::Epilog::Runtime::registers[i] = convertObjToTerm(array->buffer[i]).getAsCopy();
+						} else {
+							// Null objects refer to parameters that we wish to bind to temporary variables, which will be returned if the unification succeeds.
+							::Epilog::HeapTuple header(::Epilog::HeapTuple::Type::reference, ::Epilog::Runtime::heap.size());
+							::Epilog::Runtime::heap.push_back(header.copy());
+							::Epilog::Runtime::registers[i] = header.copy();
+						}
+					}
+					// Now, call the corresponding functor.
+					auto startAddress = ::Epilog::pushInstruction(adaptor->context, new ::Epilog::AllocateInstruction(0));
+					::Epilog::pushInstruction(adaptor->context, new ::Epilog::CallInstruction(::Epilog::HeapFunctor(string->characters, length)));
+					::Epilog::pushInstruction(adaptor->context, new ::Epilog::DeallocateInstruction());
+					try {
+						::Epilog::AST::executeInstructions(startAddress, nullptr);
+						std::list<::MysoreScript::Obj> bindings;
+						for (::Epilog::HeapReference::heapIndex i = 0; i < length; ++ i) {
+							bindings.push_back(convertTermToObj(::Epilog::dereference(::Epilog::HeapReference(::Epilog::StorageArea::reg, i)).getPointer()));
+						}
+						return ::MysoreScript::constructArrayObj(bindings);
+					} catch (const ::Epilog::UnificationError&) {
+						return nullptr;
+					}
+				}
+			}
+			return nullptr;
+		}
+		
+		::MysoreScript::Closure* defineFunction(::MysoreScript::Interpreter::Context& context, std::string name, size_t arguments) {
+			::MysoreScript::Closure* closure = gcAlloc<::MysoreScript::Closure>(0);
+			closure->isa = &::MysoreScript::ClosureClass;
+			closure->parameters = ::MysoreScript::createSmallInteger(arguments);
+			context.setSymbol(name, reinterpret_cast<::MysoreScript::Obj>(closure));
+			return closure;
+		}
+		
+		MysoreScript::MysoreScript(Interpreter::Context& epimyContext) {
+			defineFunction(context, "unify", 2)->invoke = reinterpret_cast<::MysoreScript::ClosureInvoke>(unify);
+		}
 
 		void MysoreScript::execute(std::string string) {
 			std::unique_ptr<::MysoreScript::AST::Statements> root;
 			pegmatite::StringInput input(string);
-			if (parser.parse(input, parser.g.statements, parser.g.ignored, pegmatite::defaultErrorReporter, root)) {
+			if (parser.parse(input, parser.g.statements, parser.g.ignored, errorReporter, root)) {
 				root->interpret(context);
 				previousASTs.push_back(std::move(root));
 			} else {

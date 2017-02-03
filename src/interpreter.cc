@@ -4,6 +4,7 @@
 namespace EpiMy {
 	namespace AST {
 		void LanguageBlocks::interpret(Interpreter::Context& context) {
+			Adaptors::currentContext = &context;
 			for (std::unique_ptr<LanguageBlock>& block : blocks) {
 				if (context.adaptors.find(block->language) == context.adaptors.end()) {
 					if (block->language == "Epilog") {
