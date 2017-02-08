@@ -36,7 +36,7 @@ namespace EpiMy {
 		
 		::Epilog::HeapReference convertObjToTerm(::MysoreScript::Obj& obj) {
 			// Converts a MysoreScript object into an Epilog term.
-			// Currently only integers and strings are supported.
+			// Currently only integers, strings and arrays are supported.
 			if (obj == nullptr) {
 				throw ::Epilog::RuntimeException("Tried to convert a null object into a term.", __FILENAME__, __func__, __LINE__);
 			}
@@ -186,8 +186,7 @@ namespace EpiMy {
 									if (arity != arityCheck) {
 										throw ::Epilog::RuntimeException("Tried to call a MysoreScript with the incorrect number of arguments.", __FILENAME__, __func__, __LINE__);
 									}
-									::MysoreScript::Obj* arguments = new ::MysoreScript::Obj[1];
-									arguments[0] = ::MysoreScript::createSmallInteger(187);
+									::MysoreScript::Obj* arguments = new ::MysoreScript::Obj[arity];
 									for (int i = 0; i < arity; ++ i) {
 										arguments[i] = array->buffer[i];
 									}
