@@ -1,3 +1,4 @@
+#include <fstream>
 #include <iostream>
 #include "interpreter.hh"
 #include "Epilog/src/parser.hh"
@@ -22,7 +23,9 @@ namespace EpiMy {
 			public:
 			POLYMORPHIC(Adaptor)
 			
-			virtual void execute(std::string string) = 0;
+			virtual void execute(pegmatite::Input& input) = 0;
+			virtual void execute(const std::string& string) = 0;
+			virtual void execute(std::ifstream stream) = 0;
 		};
 		
 		class Epilog: public Adaptor {
@@ -30,10 +33,13 @@ namespace EpiMy {
 			
 			public:
 			::Epilog::Interpreter::Context context;
+			::Epilog::Runtime runtime;
 			
 			Epilog(Interpreter::Context&);
 			
-			virtual void execute(std::string string) override;
+			virtual void execute(pegmatite::Input& input) override;
+			virtual void execute(const std::string& string) override;
+			virtual void execute(std::ifstream stream) override;
 		};
 		
 		class MysoreScript: public Adaptor {
@@ -46,9 +52,11 @@ namespace EpiMy {
 			
 			public:
 			MysoreScript(Interpreter::Context&);
-			virtual void execute(std::string string) override;
+			virtual void execute(pegmatite::Input& input) override;
+			virtual void execute(const std::string& string) override;
+			virtual void execute(std::ifstream stream) override;
 		};
 		
-		::MysoreScript::Obj convertTermToObj(::Epilog::HeapContainer* term);
+		::MysoreScript::Obj convertTermToObj(const ::Epilog::HeapReference& term);
 	}
 }
