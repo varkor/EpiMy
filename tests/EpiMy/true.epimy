@@ -1,0 +1,8 @@
+@[Epilog] {
+	test :- true.
+@}
+@[MysoreScript] {
+	func test() {
+		return true;
+	};
+@}

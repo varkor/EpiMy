@@ -1,3 +1,9 @@
+@[Epilog] {
+	fib(0, 0).
+	fib(1, 1).
+	fib(N, F) :- is(A, +(N, -1)), is(B, +(N, -2)), call(fib, [A], FA), fib(B, FB), is(F, +(FA, FB)).
+@}
+
 @[MysoreScript] {
 	func fib(n) {
 		if (n < 2) {
@@ -8,11 +14,7 @@
 		return fa + fb;
 	};
 @}
-@[Epilog] {
-	fib(0, 0).
-	fib(1, 1).
-	fib(N, F) :- is(A, +(N, -1)), is(B, +(N, -2)), call(fib, [A], FA), fib(B, FB), is(F, +(FA, FB)).
-@}
+
 @[MysoreScript] {
 	var x = unify("fib", [24, null]);
 @}

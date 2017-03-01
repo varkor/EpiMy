@@ -46,12 +46,14 @@ namespace EpiMy {
 			friend class Epilog;
 			
 			::MysoreScript::Parser::MysoreScriptParser parser;
-			::MysoreScript::Interpreter::Context context;
 			// The MysoreScript interpreter uses the AST during interpretation, so we must make sure that the ASTs are not freed between language blocks.
 			std::vector<std::unique_ptr<::MysoreScript::AST::Statements>> previousASTs;
 			
 			public:
+			::MysoreScript::Interpreter::Context context;
+			
 			MysoreScript(Interpreter::Context&);
+			
 			virtual void execute(pegmatite::Input& input) override;
 			virtual void execute(const std::string& string) override;
 			virtual void execute(std::ifstream stream) override;

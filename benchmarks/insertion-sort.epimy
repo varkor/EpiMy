@@ -1,0 +1,58 @@
+@[Epilog] {
+	insertionSort(List, Sorted) :- insertionSort(List, [], Sorted).
+	insertionSort([], Acc, Acc).
+	insertionSort([H | T], Acc, Sorted) :- insert(H, Acc, NAcc), insertionSort(T, NAcc, Sorted).
+
+	insert(X, [Y | T], [Y | NT]) :- >(X, Y), insert(X, T, NT).
+	insert(X, [Y | T], [X, Y | T]) :- =<(X, Y).
+	insert(X, [], [X]).
+
+	drange(To, To, []).
+	drange(To, From, [To | Range]) :- is(NewTo, +(To, -1)), drange(NewTo, From, Range).%, writeln(Range).	
+
+	convert(A, B) :- =(A, B).
+@}
+
+@[MysoreScript] {
+	func insertionSort(array) {
+		var i = 1;
+		var j;
+		var x;
+		var break;
+		var l = array.length();
+		while (i < l) {
+			x = array.at(i);
+			j = i - 1;
+			break = 0;
+			while (break == 0) {
+				break = 1;
+				if (j >= 0) {
+					if (array.at(j) > x) {
+						array.atPut(j + 1, array.at(j));
+						j = j - 1;
+						break = 0;
+					}
+				}
+			}
+			array.atPut(j + 1, x);
+			i = i + 1;
+		}
+	};
+
+	func drange(from, to) {
+		var array = [];
+		var i = from;
+		var j = 0;
+		while (i > to) {
+			array.atPut(j, i);
+			i = i - 1;
+			j = j + 1;
+		}
+		return array;
+	};
+@}
+
+@[MysoreScript] {
+	var range = drange(500, 0);
+	unify("insertionSort", [range, null]).at(1);
+@}

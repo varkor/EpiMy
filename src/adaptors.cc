@@ -79,17 +79,21 @@ namespace EpiMy {
 		
 		bool buildArray(std::list<::MysoreScript::Obj>& elements, ::Epilog::HeapContainer* term) {
 			// Returns whether the term was a true list.
-			if (::Epilog::HeapTuple* tuple = dynamic_cast<::Epilog::HeapTuple*>(term)) {
-				::Epilog::HeapFunctor* functor;
-				if (tuple->type == ::Epilog::HeapTuple::Type::compoundTerm && (functor = dynamic_cast<::Epilog::HeapFunctor*>(::Epilog::Runtime::currentRuntime->heap[tuple->reference].get()))) {
-					std::string symbol = functor->toString();
-					if (symbol == "./2") {
-						elements.push_back(convertTermToObj(::Epilog::HeapReference(::Epilog::StorageArea::heap, tuple->reference + 1)));
-						return buildArray(elements, ::Epilog::Runtime::currentRuntime->heap[tuple->reference + 2].get());
-					} else if (symbol == "[]/0") {
-						return true;
-					} else {
-						return false;
+			::Epilog::HeapContainer* nextTerm = term;
+			bool validList = true;
+			while (validList) {
+				validList = false;
+				if (::Epilog::HeapTuple* tuple = dynamic_cast<::Epilog::HeapTuple*>(nextTerm)) {
+					::Epilog::HeapFunctor* functor;
+					if (tuple->type == ::Epilog::HeapTuple::Type::compoundTerm && (functor = dynamic_cast<::Epilog::HeapFunctor*>(::Epilog::Runtime::currentRuntime->heap[tuple->reference].get()))) {
+						std::string symbol = functor->toString();
+						if (symbol == "./2") {
+							elements.push_back(convertTermToObj(::Epilog::HeapReference(::Epilog::StorageArea::heap, tuple->reference + 1)));
+							nextTerm = ::Epilog::Runtime::currentRuntime->heap[tuple->reference + 2].get();
+							validList = true;
+						} else if (symbol == "[]/0") {
+							return true;
+						}
 					}
 				}
 			}
@@ -249,6 +253,10 @@ namespace EpiMy {
 			Epilog::execute(input);
 		}
 		
+		void executeInstruction(::Epilog::Instruction::instructionReference unificationQuery) {
+			::Epilog::AST::executeInstructions(unificationQuery, unificationQuery + 1, nullptr);
+		}
+		
 		::MysoreScript::Obj unify(::MysoreScript::Closure* closure, ::MysoreScript::Obj name, ::MysoreScript::Obj parameters) {
 			// This function does not go through the usual execution path for MysoreScript closures, as it relies heavily on manipulating state outside of the MysoreScript runtime's control. Instead, this function acts as a hook that is called whenever the unify() MysoreScript function is called. This does, however, mean that currently this function must be interpreted, and not compiled.
 			if (name->isa != &::MysoreScript::StringClass) {
@@ -276,39 +284,44 @@ namespace EpiMy {
 					while (temporaryRuntime.registers.size() < length) {
 						temporaryRuntime.registers.push_back(nullptr);
 					}
-					// Push the arguments to the heap.
-					for (::Epilog::HeapReference::heapIndex i = 0; i < length; ++ i) {
-						// We can skip the usual put_structure instructions by directly modifying the registers. This is because we're in a MysoreScript context, so we're not going to be interfering with any existing instruction execution by doing so, and we're going to be triggering execution of the instructions immediately following register assignment.
-						if (array->buffer[i] != nullptr) {
-							temporaryRuntime.registers[i] = convertObjToTerm(array->buffer[i]).getAsCopy();
-						} else {
-							// Null objects refer to parameters that we wish to bind to temporary variables, which will be returned if the unification succeeds.
-							::Epilog::HeapTuple header(::Epilog::HeapTuple::Type::reference, ::Epilog::Runtime::currentRuntime->heap.size());
-							temporaryRuntime.heap.push_back(header.copy());
-							temporaryRuntime.registers[i] = header.copy();
-						}
-					}
 					// Now, call the corresponding functor.
 					if (temporaryRuntime.labels.find("<mysorescript unify>") != temporaryRuntime.labels.end()) {
 						::Epilog::Instruction::instructionReference unificationQuery = temporaryRuntime.labels["<mysorescript unify>"];
+						if (::Epilog::AllocateInstruction* instruction = dynamic_cast<::Epilog::AllocateInstruction*>((*temporaryRuntime.instructions)[unificationQuery].get())) {
+							instruction->variables = length;
+						} else {
+							throw ::Epilog::RuntimeException("Tried to invoke unification from MysoreScript without an allocate instruction.", __FILENAME__, __func__, __LINE__);
+						}
 						if (::Epilog::CallInstruction* instruction = dynamic_cast<::Epilog::CallInstruction*>((*temporaryRuntime.instructions)[unificationQuery + 1].get())) {
 							instruction->functor.name = string->characters;
 							instruction->functor.parameters = length;
 						} else {
 							throw ::Epilog::RuntimeException("Tried to invoke unification from MysoreScript without a call instruction.", __FILENAME__, __func__, __LINE__);
 						}
+						// We now want to execute all the instructions associated with the <mysorescript unify> rule we've created.
 						try {
-							// This will execute instructions up until the point where we finish executing the deallocate.
-							::Epilog::AST::executeInstructions(unificationQuery, unificationQuery + 2, nullptr);
-							std::list<::MysoreScript::Obj> bindings;
+							executeInstruction(unificationQuery); // Allocate for the call.
+							// Push the arguments to the heap.
 							for (::Epilog::HeapReference::heapIndex i = 0; i < length; ++ i) {
+								// We can skip the usual put_structure instructions by directly modifying the registers and environment variables. This is because we're in a MysoreScript context, so we're not going to be interfering with any existing instruction execution by doing so, and we're going to be triggering execution of the call instruction immediately following register assignment.
 								if (array->buffer[i] != nullptr) {
-									// The original parameters bindings get modified during unification, so to preserve consistency, we return the original non-null values of the passed parameters.
-									bindings.push_back(array->buffer[i]);
+									::Epilog::HeapReference reference(convertObjToTerm(array->buffer[i]));
+									temporaryRuntime.registers[i] = reference.getAsCopy();
+									temporaryRuntime.currentEnvironment()->variables[i] = reference.getAsCopy();
 								} else {
-									bindings.push_back(convertTermToObj(::Epilog::HeapReference(::Epilog::StorageArea::reg, i)));
+									// Null objects refer to parameters that we wish to bind to temporary variables, which will be returned if the unification succeeds.
+									::Epilog::HeapTuple header(::Epilog::HeapTuple::Type::reference, ::Epilog::Runtime::currentRuntime->heap.size());
+									temporaryRuntime.heap.push_back(header.copy());
+									temporaryRuntime.registers[i] = header.copy();
+									temporaryRuntime.currentEnvironment()->variables[i] = header.copy();
 								}
 							}
+							executeInstruction(unificationQuery + 1); // Call the instruction.
+							std::list<::MysoreScript::Obj> bindings;
+							for (::Epilog::HeapReference::heapIndex i = 0; i < length; ++ i) {
+								bindings.push_back(convertTermToObj(::Epilog::HeapReference(::Epilog::StorageArea::environment, i)));
+							}
+							executeInstruction(unificationQuery + 2); // Deallocate to clean up after the call.
 							::Epilog::Runtime::currentRuntime = previousRuntime;
 							return ::MysoreScript::constructArrayObj(bindings);
 						} catch (const ::Epilog::UnificationError&) {

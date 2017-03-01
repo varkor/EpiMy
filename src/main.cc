@@ -33,6 +33,130 @@ int executeEpiMy(std::ifstream stream) {
 	return executeEpiMy(input);
 }
 
+std::unordered_map<std::string, std::string> filesInDirectory(const std::string& basePath, const std::string& extension) {
+	std::unordered_map<std::string, std::string> paths;
+	DIR* directory;
+	if ((directory = opendir(basePath.c_str())) != NULL) {
+		struct dirent* entry;
+		while ((entry = readdir(directory)) != NULL) {
+			std::string fullname = entry->d_name;
+			std::string::size_type position;
+			// Skip hidden files and directories (or simply files with no extension).
+			if (strncmp(".", fullname.c_str(), 1) != 0 && (position = fullname.find(".")) != std::string::npos) {
+				std::string name = fullname.substr(0, position);
+				if (fullname.substr(position + 1) == extension) {
+					paths[name] = basePath + "/" + fullname;
+				}
+			}
+		}
+	}
+	return paths;
+}
+
+
+
+// Run the tests for Epilog, MysoreScript and EpiMy to make sure the compiler is working correctly.
+int test() {
+	const std::string basePath("../tests");
+	EpiMy::Interpreter::Context context;
+	std::unordered_map<std::string, std::string> files;
+	int64_t totalTests = 0;
+	int64_t totalPassed = 0;
+	int64_t tests;
+	int64_t passed;
+	
+	// Epilog tests.
+	std::cerr << "Running Epilog tests:" << std::endl;
+	tests = 0;
+	passed = 0;
+	files = filesInDirectory(basePath + "/Epilog", "el");
+	for (auto& pair : files) {
+		std::string name = pair.first;
+		std::string path = pair.second;
+		// Execute the Epilog test.
+		++ tests;
+		bool successful = true;
+		EpiMy::Adaptors::Epilog epilogAdaptor(context);
+		std::cerr << "\t";
+		auto startAddress = Epilog::pushInstruction(epilogAdaptor.context, new ::Epilog::AllocateInstruction(0));
+		Epilog::pushInstruction(epilogAdaptor.context, new ::Epilog::CallInstruction(::Epilog::HeapFunctor("test", 0)));
+		Epilog::pushInstruction(epilogAdaptor.context, new ::Epilog::DeallocateInstruction());
+		try {
+			epilogAdaptor.execute(std::ifstream(path));
+			if (epilogAdaptor.runtime.labels.find("test/0") != epilogAdaptor.runtime.labels.end()) {
+				Epilog::AST::executeInstructions(startAddress, startAddress + 3, nullptr);
+			} else {
+				successful = false;
+				std::cerr << "?";
+			}
+		} catch (const ::Epilog::Exception& exception) {
+			successful = false;
+			std::cerr << "✗";
+		}
+		if (successful) {
+			++ passed;
+			std::cerr << "✓";
+		}
+		std::cerr << "\t" << name << std::endl;
+	}
+	totalTests += tests;
+	totalPassed += passed;
+	std::cerr << passed << "/" << tests << "\tpassed.\n" << std::endl;
+	
+	// MysoreScript tests.
+	std::cerr << "Running MysoreScript tests:" << std::endl;
+	tests = 0;
+	passed = 0;
+	files = filesInDirectory(basePath + "/MysoreScript", "ms");
+	for (auto& pair : files) {
+		std::string name = pair.first;
+		std::string path = pair.second;
+		// Execute the MysoreScript test.
+		++ tests;
+		bool successful = false;
+		EpiMy::Adaptors::MysoreScript mysorescriptAdaptor(context);
+		std::cerr << "\t";
+		try {
+			mysorescriptAdaptor.execute(std::ifstream(path));
+			::MysoreScript::Obj* value;
+			if ((value = mysorescriptAdaptor.context.lookupSymbol("test")) != nullptr) {
+				::MysoreScript::Obj obj = *value;
+				if (!::MysoreScript::isInteger(*value) && obj->isa == &::MysoreScript::ClosureClass) {
+					::MysoreScript::Closure* closure = reinterpret_cast<::MysoreScript::Closure*>(obj);
+					::MysoreScript::currentContext = &mysorescriptAdaptor.context;
+					::MysoreScript::Obj returnValue = ::MysoreScript::callCompiledClosure(closure->invoke, closure, nullptr, 0);
+					if ((reinterpret_cast<intptr_t>(returnValue)) & ~7) { // Truth in MysoreScript.
+						successful = true;
+					} else {
+						std::cerr << "✗";
+					}
+				} else {
+					std::cerr << "?";
+				}
+			} else {
+				std::cerr << "?";
+			}
+		} catch (const ::Epilog::Exception& exception) {
+			successful = false;
+			std::cerr << "✗";
+		}
+		if (successful) {
+			++ passed;
+			std::cerr << "✓";
+		}
+		std::cerr << "\t" << name << std::endl;
+	}
+	totalTests += tests;
+	totalPassed += passed;
+	std::cerr << passed << "/" << tests << "\tpassed.\n" << std::endl;
+	
+	if (totalPassed < totalTests) {
+		return EXIT_FAILURE;
+	} else {
+		return EXIT_SUCCESS;
+	}
+}
+
 int benchmark() {
 	enum Languages { Epilog, MysoreScript, EpiMy };
 	const std::string basePath("../benchmarks");
@@ -109,7 +233,9 @@ int main(int argc, char* argv[]) {
 		return EXIT_FAILURE;
 	} else {
 		GC_init();
-		if (strcmp("-b", argv[1]) == 0 || strcmp("--benchmark", argv[1]) == 0) {
+		if (strcmp("-t", argv[1]) == 0 || strcmp("--test", argv[1]) == 0) {
+			return test();
+		} else if (strcmp("-b", argv[1]) == 0 || strcmp("--benchmark", argv[1]) == 0) {
 			return benchmark();
 		} else {
 			return executeEpiMy(std::ifstream(argv[1]));
