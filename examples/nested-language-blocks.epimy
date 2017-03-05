@@ -1,0 +1,21 @@
+@[MysoreScript] {
+	// The following should print "[1, 2, 3]". EpiMy allows for nested language expressions as well as top-level language blocks.
+	var x = @[MysoreScript]: [1, 2, 3] @:;
+	x.print();
+@}
+
+@[Epilog] {
+	% The following should print "[4, 5, 6]".
+	?- writeln(@[MysoreScript]: [4, 5, 6] @:).
+@}
+
+@[MysoreScript] {
+	// The following should print "[7, 8, 9]".
+	var x = @[Epilog]: [7, 8, 9] @:;
+	x.print();
+@}
+
+@[Epilog] {
+	% The following should print "[10, 11, 12]".
+	?- writeln(@[Epilog]: [10, 11, 12] @:).
+@}

@@ -17,6 +17,7 @@ set(epimy_CXX_SRCS
 	lib/MysoreScript/src/runtime.cc
 
 	# Compile the EpiMy source files.
+	src/ast.cc
 	src/adaptors.cc
 	src/interpreter.cc
 	src/main.cc

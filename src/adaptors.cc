@@ -1,5 +1,11 @@
 #include "adaptors.hh"
 
+namespace Epilog {
+	namespace AST {
+		std::pair<Instruction::instructionReference, std::unordered_map<std::string, HeapReference>> generateInstructionsForRule(Interpreter::Context& context, CompoundTerm* head, pegmatite::ASTList<EnrichedCompoundTerm>* goals);
+	}
+}
+
 namespace EpiMy {
 	void epimyErrorReporter(const pegmatite::InputRange& inputRange, const std::string& message) {
 		std::cerr << "Syntax error at " << inputRange.start.line << ":" << inputRange.start.col << ": " << inputRange.str() << std::endl;
@@ -8,6 +14,13 @@ namespace EpiMy {
 	
 	namespace Adaptors {
 		Interpreter::Context* currentContext;
+		
+		void initialiseGrammars() {
+			auto& epilogGrammar = ::Epilog::Parser::EpilogGrammar::get();
+			epilogGrammar.term.expr = epilogGrammar.term.expr | Parser::EpiMyGrammar::get().languageExpression;
+			auto& mysoreScriptGrammar = ::MysoreScript::Parser::MysoreScriptGrammar::get();
+			mysoreScriptGrammar.expression.expr = mysoreScriptGrammar.expression.expr | Parser::EpiMyGrammar::get().languageExpression;
+		}
 		
 		std::string escapeFunctorName(std::string string) {
 			std::string::size_type position = 0;
@@ -119,6 +132,26 @@ namespace EpiMy {
 				return ::MysoreScript::createSmallInteger(number->value);
 			}
 			return ::MysoreScript::constructStringObj(term->trace());
+		}
+		
+		std::shared_ptr<void> Adaptor::convertValue(std::shared_ptr<void> value, const std::string& sourceLanguage, const std::string& targetLanguage) {
+			if (sourceLanguage == targetLanguage) {
+				return value;
+			}
+			if (targetLanguage == "Epilog") {
+				if (sourceLanguage == "MysoreScript") {
+					::MysoreScript::Obj* result = std::static_pointer_cast<::MysoreScript::Obj>(value).get();
+					::MysoreScript::Obj obj = result ? *result : nullptr;
+					return std::shared_ptr<void>(new ::Epilog::HeapReference(convertObjToTerm(obj)));
+				}
+			}
+			if (targetLanguage == "MysoreScript") {
+				if (sourceLanguage == "Epilog") {
+					::Epilog::HeapReference* result = std::static_pointer_cast<::Epilog::HeapReference>(value).get();
+					return std::shared_ptr<void>(result ? new ::MysoreScript::Obj(convertTermToObj(*result)) : nullptr);
+				}
+			}
+			throw ::Epilog::RuntimeException("Unable to convert a value between the specified languages.", __FILENAME__, __func__, __LINE__);
 		}
 		
 		Epilog::Epilog(Interpreter::Context& epimyContext) {
@@ -257,6 +290,62 @@ namespace EpiMy {
 			::Epilog::AST::executeInstructions(unificationQuery, unificationQuery + 1, nullptr);
 		}
 		
+		::Epilog::HeapReference::heapIndex copyContainerToRuntime(::Epilog::HeapReference reference, ::Epilog::Runtime* runtime) {
+			::Epilog::HeapContainer* container = reference.getPointer();
+			::Epilog::HeapReference::heapIndex index = runtime->heap.size();
+			if (::Epilog::HeapTuple* tuple = dynamic_cast<::Epilog::HeapTuple*>(container)) {
+				if (tuple->type == ::Epilog::HeapTuple::Type::compoundTerm) {
+					runtime->heap.push_back(std::unique_ptr<::Epilog::HeapContainer>(new ::Epilog::HeapTuple(::Epilog::HeapTuple::Type::compoundTerm, index + 1)));
+					if (::Epilog::HeapFunctor* functor = dynamic_cast<::Epilog::HeapFunctor*>(::Epilog::HeapReference(::Epilog::StorageArea::heap, tuple->reference).getPointer())) {
+						for (int64_t i = 0; i <= functor->parameters; ++ i) {
+							copyContainerToRuntime(::Epilog::HeapReference(::Epilog::StorageArea::heap, tuple->reference + i), runtime);
+						}
+					} else {
+						throw ::Epilog::RuntimeException("Encountered a compound term not pointing to a functor.", __FILENAME__, __func__, __LINE__);
+					}
+				} else if (tuple->type == ::Epilog::HeapTuple::Type::reference) {
+					if (reference.area == ::Epilog::StorageArea::heap && tuple->reference == reference.index) {
+						runtime->heap.push_back(std::unique_ptr<::Epilog::HeapContainer>(new ::Epilog::HeapTuple(::Epilog::HeapTuple::Type::reference, index)));
+					} else {
+						return copyContainerToRuntime(::Epilog::HeapReference(::Epilog::StorageArea::heap, tuple->reference), runtime);
+					}
+				}
+			} else if (dynamic_cast<::Epilog::HeapFunctor*>(container) || dynamic_cast<::Epilog::HeapNumber*>(container)) {
+				runtime->heap.push_back(container->copy());
+			} else {
+				throw ::Epilog::RuntimeException("Encountered unknown heap container.", __FILENAME__, __func__, __LINE__);
+			}
+			return index;
+		}
+		
+		std::shared_ptr<void> Epilog::evaluate(const std::string& string) {
+			pegmatite::StringInput input("?- =(X, " + string + ")");
+			std::unique_ptr<::Epilog::AST::Query> root;
+			::Epilog::Runtime* previousRuntime = ::Epilog::Runtime::currentRuntime;
+			if (parser.parse(input, parser.grammar.query, parser.grammar.ignored, errorReporter, root)) {
+				// There could well be existing Epilog active contexts, so we start up a new runtime to make sure we don't overwrite any of the state.
+				::Epilog::Interpreter::Context context;
+				::Epilog::Runtime temporaryRuntime;
+				::Epilog::Runtime::currentRuntime = &temporaryRuntime;
+				::Epilog::initialiseBuiltins(context);
+				
+				auto pair = ::Epilog::AST::generateInstructionsForRule(context, nullptr, &root->body->goals);
+				auto startAddress = pair.first;
+				::Epilog::AST::executeInstructions(startAddress, ::Epilog::Runtime::currentRuntime->instructions->size() - 1, nullptr); // Don't execute the deallocate instruction until we've extracted the variable from it.
+				::Epilog::HeapReference::heapIndex index = copyContainerToRuntime(::Epilog::HeapReference(::Epilog::StorageArea::environment, 0), previousRuntime);
+				::Epilog::AST::executeInstructions(::Epilog::Runtime::currentRuntime->instructions->size() - 1, ::Epilog::Runtime::currentRuntime->instructions->size(), nullptr); // Deallocate.
+				while (previousRuntime->registers.size() < temporaryRuntime.registers.size()) {
+					previousRuntime->registers.push_back(nullptr);
+				}
+				
+				::Epilog::Runtime::currentRuntime = previousRuntime;
+				return std::shared_ptr<void>(new ::Epilog::HeapReference(::Epilog::StorageArea::heap, index));
+			} else {
+				::Epilog::Runtime::currentRuntime = previousRuntime;
+				throw ::Epilog::CompilationException("Could not parse the Epilog term.", __FILENAME__, __func__, __LINE__);
+			}
+		}
+		
 		::MysoreScript::Obj unify(::MysoreScript::Closure* closure, ::MysoreScript::Obj name, ::MysoreScript::Obj parameters) {
 			// This function does not go through the usual execution path for MysoreScript closures, as it relies heavily on manipulating state outside of the MysoreScript runtime's control. Instead, this function acts as a hook that is called whenever the unify() MysoreScript function is called. This does, however, mean that currently this function must be interpreted, and not compiled.
 			if (name->isa != &::MysoreScript::StringClass) {
@@ -352,7 +441,7 @@ namespace EpiMy {
 		
 		void MysoreScript::execute(pegmatite::Input& input) {
 			std::unique_ptr<::MysoreScript::AST::Statements> root;
-			if (parser.parse(input, parser.g.statements, parser.g.ignored, errorReporter, root)) {
+			if (parser.parse(input, parser.grammar.statements, parser.grammar.ignored, errorReporter, root)) {
 				root->interpret(context);
 				previousASTs.push_back(std::move(root));
 			} else {
@@ -368,6 +457,18 @@ namespace EpiMy {
 		void MysoreScript::execute(std::ifstream stream) {
 			pegmatite::StreamInput input(pegmatite::StreamInput::Create("MysoreScript", stream));
 			MysoreScript::execute(input);
+		}
+		
+		std::shared_ptr<void> MysoreScript::evaluate(const std::string& string) {
+			pegmatite::StringInput input(string);
+			std::unique_ptr<::MysoreScript::AST::Expression> root;
+			if (parser.parse(input, parser.grammar.expression, parser.grammar.ignored, errorReporter, root)) {
+				::MysoreScript::Obj* value = new ::MysoreScript::Obj(root->evaluate(context));
+				previousASTs.push_back(std::move(root));
+				return std::shared_ptr<void>(value);
+			} else {
+				throw ::Epilog::CompilationException("Could not parse the MysoreScript expression.", __FILENAME__, __func__, __LINE__);
+			}
 		}
 	}
 }

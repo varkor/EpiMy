@@ -5,7 +5,6 @@
 #include <time.h>
 #include <unordered_map>
 #include "adaptors.hh"
-#include "parser.hh"
 
 void usage(const char command[]) {
 	std::cerr << "usage: [-b | --benchmark] " << command << " <file>" << std::endl;
@@ -233,6 +232,10 @@ int main(int argc, char* argv[]) {
 		return EXIT_FAILURE;
 	} else {
 		GC_init();
+		
+		// Enable language expressions to be used in the different languages.
+		EpiMy::Adaptors::initialiseGrammars();
+		
 		if (strcmp("-t", argv[1]) == 0 || strcmp("--test", argv[1]) == 0) {
 			return test();
 		} else if (strcmp("-b", argv[1]) == 0 || strcmp("--benchmark", argv[1]) == 0) {

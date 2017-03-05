@@ -8,7 +8,7 @@
 	insert(X, [], [X]).
 
 	drange(To, To, []).
-	drange(To, From, [To | Range]) :- is(NewTo, +(To, -1)), drange(NewTo, From, Range).%, writeln(Range).	
+	drange(To, From, [To | Range]) :- is(NewTo, +(To, -1)), drange(NewTo, From, Range).
 
 	convert(A, B) :- =(A, B).
 @}

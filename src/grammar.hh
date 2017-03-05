@@ -1,4 +1,6 @@
 #include "Pegmatite/pegmatite.hh"
+#include "Epilog/src/grammar.hh"
+#include "MysoreScript/src/grammar.hh"
 
 namespace EpiMy {
 	namespace Parser {
@@ -36,15 +38,20 @@ namespace EpiMy {
 			// Language identifier: the name of a programming language.
 			Rule languageIdentifier = +character;
 			
-			Rule languageExtract = *(!ExprPtr("@}") >> any());
+			// Language expression: an expression in another programming language;
+			Rule languageExpressionExtract = *(!ExprPtr("@:") >> any());
+			
+			Rule languageExpression = term("@["_E >> languageIdentifier >> "]:") >> languageExpressionExtract >> "@:";
+			
+			Rule languageBlockExtract = *(!ExprPtr("@}") >> any());
 			
 			// Language block: a block of code from a programming language.
-			Rule languageBlock = term("@["_E >> languageIdentifier >> ']') >> '{' >> languageExtract >> "@}";
+			Rule languageBlock = term("@["_E >> languageIdentifier >> ']') >> '{' >> languageBlockExtract >> "@}";
 			
 			Rule languageBlocks = *languageBlock;
 			
 			// Singleton getter.
-			static const EpiMyGrammar& get() {
+			static EpiMyGrammar& get() {
 				static EpiMyGrammar grammar;
 				return grammar;
 			}
@@ -52,9 +59,10 @@ namespace EpiMy {
 			// Avoid the possibility of accidental copying of the singleton.
 			EpiMyGrammar(EpiMyGrammar const&) = delete;
 			void operator=(EpiMyGrammar const&) = delete;
+			
 			// EpilogGrammar should only be constructed via the getter.
-			private:
-			EpiMyGrammar() {};
+			protected:
+			EpiMyGrammar() {}
 		};
 	}
 }
