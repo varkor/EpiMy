@@ -68,5 +68,19 @@ namespace EpiMy {
 		};
 		
 		::MysoreScript::Obj convertTermToObj(const ::Epilog::HeapReference& term);
+		
+		class EpiMy: public Adaptor {
+			::EpiMy::Parser::EpiMyParser parser;
+			::EpiMy::Interpreter::Context context;
+			
+			public:
+			EpiMy();
+			
+			virtual void execute(pegmatite::Input& input) override;
+			virtual void execute(const std::string& string) override;
+			virtual void execute(std::ifstream stream) override;
+			
+			virtual std::shared_ptr<void> evaluate(const std::string& string) override;
+		};
 	}
 }

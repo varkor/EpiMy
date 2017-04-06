@@ -9,4 +9,5 @@ insert(X, [], [X]).
 drange(To, To, []).
 drange(To, From, [To | Range]) :- is(NewTo, +(To, -1)), drange(NewTo, From, Range).
 
-?- drange(500, 0, Range), insertionSort(Range, Sorted).
+?- drange(800, 0, Range), insertionSort(Range, Sorted).
+?- drange(800, 0, Range), insertionSort(Range, Sorted).

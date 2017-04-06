@@ -470,5 +470,30 @@ namespace EpiMy {
 				throw ::Epilog::CompilationException("Could not parse the MysoreScript expression.", __FILENAME__, __func__, __LINE__);
 			}
 		}
+		
+		EpiMy::EpiMy() { }
+		
+		void EpiMy::execute(pegmatite::Input& input) {
+			std::unique_ptr<::EpiMy::AST::LanguageBlocks> root;
+			if (parser.parse(input, parser.grammar.languageBlocks, parser.grammar.ignored, errorReporter, root)) {
+				root->interpret(context);
+			} else {
+				throw ::Epilog::CompilationException("Could not parse the EpiMy block.", __FILENAME__, __func__, __LINE__);
+			}
+		}
+		
+		void EpiMy::execute(const std::string& string) {
+			pegmatite::StringInput input(string);
+			EpiMy::execute(input);
+		}
+		
+		void EpiMy::execute(std::ifstream stream) {
+			pegmatite::StreamInput input(pegmatite::StreamInput::Create("EpiMy", stream));
+			EpiMy::execute(input);
+		}
+		
+		std::shared_ptr<void> EpiMy::evaluate(const std::string& string) {
+			throw ::Epilog::CompilationException("EpiMy subexpressions cannot be evaluated in isolation.", __FILENAME__, __func__, __LINE__);
+		}
 	}
 }

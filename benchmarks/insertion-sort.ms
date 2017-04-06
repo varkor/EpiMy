@@ -35,5 +35,7 @@ func drange(from, to) {
 	return array;
 };
 
-var range = drange(500, 0);
-insertionSort(range);
+var range1 = drange(800, 0);
+insertionSort(range1);
+var range2 = drange(800, 0);
+insertionSort(range2);

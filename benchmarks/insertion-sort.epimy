@@ -53,6 +53,8 @@
 @}
 
 @[MysoreScript] {
-	var range = drange(500, 0);
-	unify("insertionSort", [range, null]).at(1);
+	var range_mss = drange(800, 0);
+	unify("insertionSort", [range_mss, null]).at(1);
+	var range_el = unify("drange", [800, 0, null]).at(2);
+	insertionSort(range_el);
 @}

@@ -1,0 +1,9 @@
+@[MysoreScript] {
+	x = 5;
+@}
+@[Epilog] {
+	?- var(x, X), is(Y, *(X, X)), set(y, Y).
+@}
+@[MysoreScript] {
+	y.print(); // Prints "25".
+@}
